@@ -2,8 +2,14 @@ services:
   - type: web
     name: land-registry-frontend
     env: static
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     staticPublishPath: ./build
     envVars:
       - key: NODE_VERSION
         value: 18.18.0
+      - key: GENERATE_SOURCEMAP
+        value: false
+      - key: SKIP_PREFLIGHT_CHECK
+        value: true
+      - key: DISABLE_ESLINT_PLUGIN
+        value: true

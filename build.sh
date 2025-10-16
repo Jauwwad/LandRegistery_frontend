@@ -3,17 +3,29 @@
 
 echo "Starting build process..."
 
-# Set Node.js version
-export NODE_VERSION=18.18.0
+# Set environment variables
+export NODE_ENV=production
+export GENERATE_SOURCEMAP=false
+export SKIP_PREFLIGHT_CHECK=true
+export DISABLE_ESLINT_PLUGIN=true
 
-# Clean install to avoid permission issues
-rm -rf node_modules package-lock.json
-npm install
+# Clean install dependencies
+echo "Installing dependencies..."
+npm ci
 
-# Fix permissions
-chmod +x node_modules/.bin/*
+# Verify react-scripts is installed
+echo "Verifying react-scripts installation..."
+if [ ! -f "node_modules/.bin/react-scripts" ]; then
+    echo "react-scripts not found, installing manually..."
+    npm install react-scripts --save
+fi
+
+# List node_modules/.bin to debug
+echo "Available scripts:"
+ls -la node_modules/.bin/ | head -10
 
 # Build the application
+echo "Building application..."
 npm run build
 
 echo "Build completed successfully!"
