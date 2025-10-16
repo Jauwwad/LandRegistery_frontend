@@ -1,38 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Container,
+  Box,
   Grid,
-  Paper,
-  Typography,
   Card,
   CardContent,
-  Box,
+  Typography,
+  Avatar,
+  IconButton,
   Button,
-  CircularProgress,
-  Alert,
+  Container,
+  useTheme,
+  alpha,
+  Paper,
   Chip,
+  Divider,
+  Stack,
+  LinearProgress,
 } from '@mui/material';
 import {
-  Home,
-  Verified,
-  Pending,
-  AccountBalance,
-  TrendingUp,
-  Map,
-  Add,
+  TrendingUp as TrendingUpIcon,
+  Home as HomeIcon,
+  SwapHoriz as TransferIcon,
+  Add as AddIcon,
+  LocationOn as LocationIcon,
+  Assessment as AssessmentIcon,
+  Timeline as TimelineIcon,
+  Speed as SpeedIcon,
+  Security as SecurityIcon,
+  Verified as VerifiedIcon,
+  AccountBalance as AccountBalanceIcon,
+  ArrowForward as ArrowForwardIcon,
+  Star as StarIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { landAPI, formatCurrency, formatArea } from '../services/api';
+import { landAPI } from '../services/api';
+import { customStyles, gradients, colors } from '../theme';
 
-const Dashboard = () => {
-  const [statistics, setStatistics] = useState(null);
+function Dashboard() {
+  const theme = useTheme();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    totalLands: 0,
+    pendingTransfers: 0,
+    completedTransfers: 0,
+    totalValue: 0
+  });
   const [recentLands, setRecentLands] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const { user, isAdmin } = useAuth();
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
@@ -40,302 +56,423 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true);
+      const landsResponse = await landAPI.getLands();
       
-      // Fetch statistics
-      const statsResponse = await landAPI.getStatistics();
-      setStatistics(statsResponse.data);
-
-      // Fetch recent lands
-      const landsResponse = await landAPI.getLands({ per_page: 5, owner_only: !isAdmin() });
-      setRecentLands(landsResponse.data.lands);
-
-    } catch (err) {
-      setError('Failed to load dashboard data');
-      console.error('Dashboard error:', err);
+      if (landsResponse && landsResponse.data) {
+        const lands = landsResponse.data.lands || [];
+        setStats({
+          totalLands: lands.length,
+          pendingTransfers: lands.filter(land => land.status === 'pending_transfer').length,
+          completedTransfers: lands.filter(land => land.status === 'transferred').length,
+          totalValue: lands.reduce((sum, land) => sum + (land.value || 0), 0)
+        });
+        setRecentLands(lands.slice(0, 3));
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const StatCard = ({ title, value, icon, color, subtitle, onClick }) => (
-    <Card 
-      className="dashboard-card" 
-      sx={{ cursor: onClick ? 'pointer' : 'default' }}
+  const StatCard = ({ title, value, icon, gradient, change, onClick }) => (
+    <Card
+      sx={{
+        ...customStyles.glassMorphism,
+        cursor: onClick ? 'pointer' : 'default',
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        '&:hover': onClick ? {
+          transform: 'translateY(-8px) scale(1.02)',
+          ...customStyles.neonGlow,
+        } : {},
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '4px',
+          background: gradient,
+        },
+      }}
       onClick={onClick}
     >
-      <CardContent>
+      <CardContent sx={{ p: 3 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between">
           <Box>
-            <Typography color="textSecondary" gutterBottom variant="h6">
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'text.secondary',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                mb: 1,
+              }}
+            >
               {title}
             </Typography>
-            <Typography variant="h4" component="div" color={color}>
+            <Typography
+              variant="h3"
+              sx={{
+                fontWeight: 700,
+                background: gradient,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                mb: 1,
+              }}
+            >
               {value}
             </Typography>
-            {subtitle && (
-              <Typography variant="body2" color="textSecondary">
-                {subtitle}
-              </Typography>
+            {change && (
+              <Chip
+                label={change}
+                size="small"
+                sx={{
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: colors.success.main,
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                }}
+              />
             )}
           </Box>
-          <Box sx={{ color, fontSize: 40 }}>
+          <Avatar
+            sx={{
+              background: gradient,
+              width: 64,
+              height: 64,
+              boxShadow: '0 8px 24px rgba(0, 212, 255, 0.3)',
+            }}
+          >
             {icon}
-          </Box>
+          </Avatar>
         </Box>
       </CardContent>
     </Card>
   );
 
-  const getStatusChip = (status) => (
-    <Chip 
-      label={status.toUpperCase()}
-      size="small"
-      className={`status-chip ${status}`}
-    />
+  const QuickActionCard = ({ title, description, icon, gradient, onClick }) => (
+    <Card
+      sx={{
+        ...customStyles.glassMorphism,
+        cursor: 'pointer',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          ...customStyles.neonGlow,
+        },
+      }}
+      onClick={onClick}
+    >
+      <CardContent sx={{ p: 3, textAlign: 'center' }}>
+        <Avatar
+          sx={{
+            background: gradient,
+            width: 56,
+            height: 56,
+            mx: 'auto',
+            mb: 2,
+            boxShadow: '0 8px 24px rgba(0, 212, 255, 0.3)',
+          }}
+        >
+          {icon}
+        </Avatar>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+          {title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {description}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+
+  const WelcomeSection = () => (
+    <Paper
+      sx={{
+        ...customStyles.glassMorphism,
+        p: 4,
+        mb: 4,
+        position: 'relative',
+        overflow: 'hidden',
+        background: gradients.hero,
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: '-50%',
+          right: '-50%',
+          width: '200%',
+          height: '200%',
+          background: `radial-gradient(circle, ${alpha(colors.primary.main, 0.1)} 0%, transparent 70%)`,
+          animation: 'pulse 4s ease-in-out infinite',
+        },
+      }}
+    >
+      <Box position="relative" zIndex={1}>
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={8}>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 700,
+                mb: 1,
+                background: gradients.neon,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              Welcome back, {user?.name || 'User'}! 🚀
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              Manage your digital land portfolio with blockchain security and real-time insights.
+            </Typography>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/register-land')}
+                sx={{
+                  background: gradients.primary,
+                  boxShadow: '0 4px 16px rgba(0, 212, 255, 0.3)',
+                }}
+              >
+                Register New Land
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<LocationIcon />}
+                onClick={() => navigate('/map')}
+              >
+                View Map
+              </Button>
+            </Stack>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box
+              sx={{
+                position: 'relative',
+                height: 200,
+                background: gradients.card,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              }}
+            >
+              <SecurityIcon sx={{ fontSize: 80, color: colors.primary.main, opacity: 0.7 }} />
+            </Box>
+          </Grid>
+        </Grid>
+      </Box>
+    </Paper>
   );
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Box sx={{ width: '100%' }}>
+          <LinearProgress 
+            sx={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              '& .MuiLinearProgress-bar': {
+                background: gradients.primary,
+              },
+            }}
+          />
+        </Box>
+        <Typography variant="h6" align="center" sx={{ mt: 2 }}>
+          Loading your dashboard...
+        </Typography>
+      </Container>
     );
   }
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      <WelcomeSection />
 
-      {/* Welcome Section */}
-      <Box mb={4}>
-        <Typography variant="h4" gutterBottom>
-          Welcome back, {user?.first_name}! 👋
-        </Typography>
-        <Typography variant="subtitle1" color="textSecondary">
-          {isAdmin() ? 'Admin Dashboard - Manage the entire land registry system' : 'Manage your land properties and track registrations'}
-        </Typography>
-      </Box>
-
-      {/* Statistics Cards */}
-      <Grid container spacing={3} className="stats-grid">
-        <Grid item xs={12} sm={6} md={3}>
+      {/* Stats Grid */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
             title="Total Lands"
-            value={statistics?.total_lands || 0}
-            icon={<Home />}
-            color="primary.main"
-            subtitle={isAdmin() ? 'All registered lands' : 'Your properties'}
+            value={stats.totalLands}
+            icon={<HomeIcon />}
+            gradient={gradients.primary}
+            change="+12% this month"
             onClick={() => navigate('/lands')}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
-            title="Verified"
-            value={statistics?.verified_lands || 0}
-            icon={<Verified />}
-            color="success.main"
-            subtitle="Approved properties"
-            onClick={() => navigate('/lands?status=verified')}
+            title="Pending Transfers"
+            value={stats.pendingTransfers}
+            icon={<TransferIcon />}
+            gradient={gradients.secondary}
+            onClick={() => navigate('/transfers')}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
-            title="Pending"
-            value={statistics?.pending_lands || 0}
-            icon={<Pending />}
-            color="warning.main"
-            subtitle="Awaiting verification"
-            onClick={() => navigate('/lands?status=pending')}
+            title="Completed"
+            value={stats.completedTransfers}
+            icon={<VerifiedIcon />}
+            gradient="linear-gradient(135deg, #10B981 0%, #34D399 100%)"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} lg={3}>
           <StatCard
-            title="On Blockchain"
-            value={statistics?.blockchain_lands || 0}
-            icon={<AccountBalance />}
-            color="secondary.main"
-            subtitle="Registered on Polygon"
+            title="Portfolio Value"
+            value={`$${stats.totalValue.toLocaleString()}`}
+            icon={<AccountBalanceIcon />}
+            gradient="linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)"
           />
         </Grid>
       </Grid>
 
-      <Grid container spacing={3}>
-        {/* Recent Lands */}
-        <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-              <Typography variant="h6">
-                {isAdmin() ? 'Recent Land Registrations' : 'Your Recent Lands'}
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<Add />}
+      <Grid container spacing={4}>
+        {/* Quick Actions */}
+        <Grid item xs={12} lg={8}>
+          <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
+            Quick Actions
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6} md={4}>
+              <QuickActionCard
+                title="Register Land"
+                description="Add new property to blockchain"
+                icon={<AddIcon />}
+                gradient={gradients.primary}
                 onClick={() => navigate('/register-land')}
-                size="small"
-              >
-                Register New Land
-              </Button>
-            </Box>
-            
-            {recentLands.length === 0 ? (
-              <Box textAlign="center" py={4}>
-                <Typography color="textSecondary">
-                  No lands found. Start by registering your first property!
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => navigate('/register-land')}
-                  sx={{ mt: 2 }}
-                >
-                  Register Land
-                </Button>
-              </Box>
-            ) : (
-              <Box>
-                {recentLands.map((land) => (
-                  <Card 
-                    key={land.id} 
-                    className={`land-card property-type-${land.property_type}`}
-                    sx={{ mb: 2 }}
-                    onClick={() => navigate(`/lands/${land.id}`)}
-                  >
-                    <CardContent>
-                      <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
-                        <Typography variant="h6" component="div">
-                          {land.title}
-                        </Typography>
-                        {getStatusChip(land.status)}
-                      </Box>
-                      
-                      <Typography color="textSecondary" gutterBottom>
-                        📍 {land.location}
-                      </Typography>
-                      
-                      <Box display="flex" gap={2} mb={1}>
-                        <Typography variant="body2">
-                          📐 {formatArea(land.area)}
-                        </Typography>
-                        <Typography variant="body2">
-                          🏷️ {land.property_type}
-                        </Typography>
-                        {land.price && (
-                          <Typography variant="body2">
-                            💰 {formatCurrency(land.price)}
-                          </Typography>
-                        )}
-                      </Box>
-                      
-                      <Box display="flex" justifyContent="between" alignItems="center">
-                        <Typography variant="caption" color="textSecondary">
-                          ID: {land.property_id}
-                        </Typography>
-                        {land.is_registered_on_blockchain && (
-                          <Chip
-                            label="On Blockchain"
-                            size="small"
-                            className="blockchain-badge"
-                            sx={{ ml: 'auto' }}
-                          />
-                        )}
-                      </Box>
-                    </CardContent>
-                  </Card>
-                ))}
-                
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => navigate('/lands')}
-                  sx={{ mt: 2 }}
-                >
-                  View All Lands
-                </Button>
-              </Box>
-            )}
-          </Paper>
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <QuickActionCard
+                title="View Properties"
+                description="Browse your land portfolio"
+                icon={<HomeIcon />}
+                gradient={gradients.secondary}
+                onClick={() => navigate('/lands')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <QuickActionCard
+                title="Map View"
+                description="Explore lands on interactive map"
+                icon={<LocationIcon />}
+                gradient="linear-gradient(135deg, #10B981 0%, #34D399 100%)"
+                onClick={() => navigate('/map')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <QuickActionCard
+                title="Analytics"
+                description="View detailed insights"
+                icon={<AssessmentIcon />}
+                gradient="linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)"
+                onClick={() => navigate('/analytics')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <QuickActionCard
+                title="Transfers"
+                description="Manage property transfers"
+                icon={<TransferIcon />}
+                gradient="linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)"
+                onClick={() => navigate('/transfers')}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={4}>
+              <QuickActionCard
+                title="Profile"
+                description="Update your information"
+                icon={<StarIcon />}
+                gradient="linear-gradient(135deg, #EF4444 0%, #F87171 100%)"
+                onClick={() => navigate('/profile')}
+              />
+            </Grid>
+          </Grid>
         </Grid>
 
-        {/* Quick Actions */}
-        <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Quick Actions
-            </Typography>
-            
-            <Box display="flex" flexDirection="column" gap={2}>
+        {/* Recent Activity */}
+        <Grid item xs={12} lg={4}>
+          <Paper sx={{ ...customStyles.glassMorphism, p: 3, height: 'fit-content' }}>
+            <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Recent Lands
+              </Typography>
               <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => navigate('/register-land')}
-                fullWidth
-              >
-                Register New Land
-              </Button>
-              
-              <Button
-                variant="outlined"
-                startIcon={<Map />}
-                onClick={() => navigate('/map')}
-                fullWidth
-              >
-                View Map
-              </Button>
-              
-              <Button
-                variant="outlined"
-                startIcon={<Home />}
+                size="small"
+                endIcon={<ArrowForwardIcon />}
                 onClick={() => navigate('/lands')}
-                fullWidth
               >
-                My Properties
+                View All
               </Button>
-              
-              {isAdmin() && (
-                <Button
-                  variant="outlined"
-                  startIcon={<TrendingUp />}
-                  onClick={() => navigate('/admin')}
-                  fullWidth
-                >
-                  Admin Panel
-                </Button>
+            </Box>
+            <Stack spacing={2}>
+              {recentLands.length > 0 ? (
+                recentLands.map((land, index) => (
+                  <Box
+                    key={land.id}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        background: 'rgba(0, 212, 255, 0.1)',
+                        transform: 'translateX(8px)',
+                      },
+                    }}
+                    onClick={() => navigate(`/lands/${land.id}`)}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      {land.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {land.location}
+                    </Typography>
+                    <Box display="flex" alignItems="center" justifyContent="between" mt={1}>
+                      <Chip
+                        label={land.status}
+                        size="small"
+                        color={land.status === 'active' ? 'success' : 'warning'}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                        ${land.value?.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))
+              ) : (
+                <Box textAlign="center" py={4}>
+                  <HomeIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    No lands registered yet
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => navigate('/register-land')}
+                    sx={{ mt: 2 }}
+                  >
+                    Register Your First Land
+                  </Button>
+                </Box>
               )}
-            </Box>
-          </Paper>
-
-          {/* System Status */}
-          <Paper sx={{ p: 3, mt: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              System Status
-            </Typography>
-            
-            <Box display="flex" flexDirection="column" gap={1}>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="body2">Database</Typography>
-                <Chip label="Connected" color="success" size="small" />
-              </Box>
-              
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="body2">Blockchain</Typography>
-                <Chip label="Polygon Amoy" color="primary" size="small" />
-              </Box>
-              
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Typography variant="body2">Total Transfers</Typography>
-                <Typography variant="body2">{statistics?.total_transfers || 0}</Typography>
-              </Box>
-            </Box>
+            </Stack>
           </Paper>
         </Grid>
       </Grid>
     </Container>
   );
-};
+}
 
 export default Dashboard;
