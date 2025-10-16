@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:5001/api',
+  baseURL: 'https://landregistry-backend.onrender.com/api',
   timeout: 10000,
 });
 
